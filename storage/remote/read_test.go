@@ -183,6 +183,149 @@ func TestSeriesSetFilter(t *testing.T) {
 			},
 		},
 	}
+		
+			for _, tc := range tests {
+		filtered := newSeriesSetFilter(FromQueryResult(true, tc.in), tc.toRemove)
+		act, ws, err := ToQueryResult(filtered, 1e6)
+		require.NoError(t, err)
+		require.Empty(t, ws)
+		require.Equal(t, tc.expected, act)
+			}
+		}
+				
+		func TestRequiredMatchers(t *testing.T) {
+					tests := []struct {
+						name              string
+						requiredMatchers  []*labels.Matcher
+						queryMatchers     []*labels.Matcher
+						expectNoopResult  bool
+					}{
+						{
+							name: "equal matcher - match",
+							requiredMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "A"),
+							},
+							queryMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "A"),
+							},
+							expectNoopResult: false,
+						},
+						{
+							name: "equal matcher - no match",
+							requiredMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "A"),
+							},
+							queryMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "B"),
+							},
+							expectNoopResult: true,
+						},
+						{
+							name: "regexp matcher - match",
+							requiredMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchRegexp, "cluster", "A.*"),
+							},
+							queryMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "ABC"),
+							},
+							expectNoopResult: false,
+						},
+						{
+							name: "regexp matcher - no match",
+							requiredMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchRegexp, "cluster", "A.*"),
+							},
+							queryMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "BCD"),
+							},
+							expectNoopResult: true,
+						},
+						{
+							name: "not equal matcher - match",
+							requiredMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchNotEqual, "cluster", "B"),
+							},
+							queryMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "A"),
+							},
+							expectNoopResult: false,
+						},
+						{
+							name: "not equal matcher - no match",
+							requiredMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchNotEqual, "cluster", "A"),
+							},
+							queryMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "A"),
+							},
+							expectNoopResult: true,
+						},
+						{
+							name: "not regexp matcher - match",
+							requiredMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchNotRegexp, "cluster", "B.*"),
+							},
+							queryMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "A"),
+							},
+							expectNoopResult: false,
+						},
+						{
+							name: "not regexp matcher - no match",
+							requiredMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchNotRegexp, "cluster", "A.*"),
+							},
+							queryMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "ABC"),
+							},
+							expectNoopResult: true,
+						},
+						{
+							name: "multiple matchers - all match",
+							requiredMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "A"),
+				labels.MustNewMatcher(labels.MatchEqual, "env", "prod"),
+							},
+							queryMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "A"),
+				labels.MustNewMatcher(labels.MatchEqual, "env", "prod"),
+							},
+							expectNoopResult: false,
+						},
+						{
+							name: "multiple matchers - partial match",
+							requiredMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "A"),
+				labels.MustNewMatcher(labels.MatchEqual, "env", "prod"),
+							},
+							queryMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "A"),
+				labels.MustNewMatcher(labels.MatchEqual, "env", "dev"),
+							},
+							expectNoopResult: true,
+						},
+					}
+				
+					for _, tc := range tests {
+						t.Run(tc.name, func(t *testing.T) {
+							mockClient := &mockClient{}
+							
+							q := &querier{
+				mint:             0,
+				maxt:             100,
+				client:           mockClient,
+				requiredMatchers: tc.requiredMatchers,
+							}
+				
+							result := q.Select(context.Background(), true, nil, tc.queryMatchers...)
+							
+							_, isNoop := result.(*storage.NoopSeriesSet)
+							if tc.expectNoopResult != isNoop {
+				t.Errorf("Expected NoopSeriesSet: %v, got: %v", tc.expectNoopResult, isNoop)
+							}
+						})
+					}
+				}
 
 	for _, tc := range tests {
 		filtered := newSeriesSetFilter(FromQueryResult(true, tc.in), tc.toRemove)

@@ -104,6 +104,94 @@ type ItemType int
 // When changing this list, make sure to also change
 // the maybe_label grammar rule in the generated parser
 // to avoid misinterpretation of labels as keywords.
+// These constants need to be defined before they're used
+const (
+	// ItemType values.
+	ERROR ItemType = iota
+	EOF
+
+	// Operators.
+	operatorsStart
+	LAND    // and
+	LOR     // or
+	LUNLESS // unless
+	ATAN2   // atan2
+	operatorsEnd
+
+	// Aggregators.
+	aggregatorsStart ItemType = 200
+	SUM
+	AVG
+	COUNT
+	MIN
+	MAX
+	GROUP
+	STDDEV
+	STDVAR
+	TOPK
+	BOTTOMK
+	COUNT_VALUES
+	QUANTILE
+	LIMITK
+	LIMIT_RATIO
+	aggregatorsEnd
+
+	// Keywords.
+	keywordsStart ItemType = 600
+	OFFSET
+	BY
+	WITHOUT
+	ON
+	IGNORING
+	GROUP_LEFT
+	GROUP_RIGHT
+	BOOL
+	keywordsEnd
+
+	// Start symbols - for parser entry points
+	startSymbolsStart ItemType = 700
+	START_METRIC
+	START_SERIES_DESCRIPTION
+	START_EXPRESSION
+	START_METRIC_SELECTOR
+	startSymbolsEnd
+
+	// Define preprocessor constants
+	preprocessorStart ItemType = 400
+	START
+	END
+	STEP
+	preprocessorEnd
+)
+
+// Additional token types that don't fit in the main constants block
+const (
+	COMMENT ItemType = 800 + iota
+	IDENTIFIER
+	METRIC_IDENTIFIER
+	STRING
+	NUMBER
+	DURATION
+
+	// Tokens for special operators
+	LEFT_PAREN
+	RIGHT_PAREN
+	LEFT_BRACE
+	RIGHT_BRACE
+	LEFT_BRACKET
+	RIGHT_BRACKET
+	COMMA
+	EQL
+	COLON
+	SEMICOLON
+	AT
+	OPEN_HIST
+	CLOSE_HIST
+	BLANK
+	TIMES
+	SPACE
+)
+
 var key = map[string]ItemType{
 	// Operators.
 	"and":    LAND,
@@ -143,6 +231,73 @@ var key = map[string]ItemType{
 	"step":  STEP,
 }
 
+// init populates the keyword and function maps.
+var keywords = map[string]ItemType{
+	// Operators.
+	"and":    LAND,
+	"or":     LOR,
+	"unless": LUNLESS,
+	"atan2":  ATAN2,
+
+	// Aggregators.
+	"sum":          SUM,
+	"avg":          AVG,
+	"count":        COUNT,
+	"min":          MIN,
+	"max":          MAX,
+	"group":        GROUP,
+	"stddev":       STDDEV,
+	"stdvar":       STDVAR,
+	"topk":         TOPK,
+	"bottomk":      BOTTOMK,
+	"limitk":       LIMITK,
+	"limitratio":   LIMIT_RATIO,
+	"count_values": COUNT_VALUES,
+	"quantile":     QUANTILE,
+
+	// Keywords.
+	"offset":      OFFSET,
+	"by":          BY,
+	"without":     WITHOUT,
+	"on":          ON,
+	"ignoring":    IGNORING,
+	"group_left":  GROUP_LEFT,
+	"group_right": GROUP_RIGHT,
+	"bool":        BOOL,
+
+	// Preprocessors.
+	"start": START,
+	"end":   END,
+	"step":  STEP,
+}
+
+// Define histogram descriptor constants
+const (
+	histogramDescStart ItemType = 300
+	SUM_DESC
+	COUNT_DESC
+	SCHEMA_DESC
+	OFFSET_DESC
+	NEGATIVE_OFFSET_DESC
+	BUCKETS_DESC
+	NEGATIVE_BUCKETS_DESC
+	ZERO_BUCKET_DESC
+	ZERO_BUCKET_WIDTH_DESC
+	CUSTOM_VALUES_DESC
+	COUNTER_RESET_HINT_DESC
+	histogramDescEnd
+)
+
+// Define counter reset hint constants
+const (
+	counterResetHintsStart ItemType = 500
+	UNKNOWN_COUNTER_RESET
+	COUNTER_RESET
+	NOT_COUNTER_RESET
+	GAUGE_TYPE
+	counterResetHintsEnd
+)
+
 var histogramDesc = map[string]ItemType{
 	"sum":                SUM_DESC,
 	"count":              COUNT_DESC,
@@ -167,21 +322,39 @@ var counterResetHints = map[string]ItemType{
 // ItemTypeStr is the default string representations for common Items. It does not
 // imply that those are the only character sequences that can be lexed to such an Item.
 var ItemTypeStr = map[ItemType]string{
-	OPEN_HIST:     "{{",
-	CLOSE_HIST:    "}}",
-	LEFT_PAREN:    "(",
-	RIGHT_PAREN:   ")",
-	LEFT_BRACE:    "{",
-	RIGHT_BRACE:   "}",
-	LEFT_BRACKET:  "[",
-	RIGHT_BRACKET: "]",
-	COMMA:         ",",
-	EQL:           "=",
-	COLON:         ":",
-	SEMICOLON:     ";",
-	BLANK:         "_",
-	TIMES:         "x",
-	SPACE:         "<space>",
+	OPEN_HIST:               "{{",
+	CLOSE_HIST:              "}}",
+	LEFT_PAREN:              "(",
+	RIGHT_PAREN:             ")",
+	LEFT_BRACE:              "{",
+	RIGHT_BRACE:             "}",
+	LEFT_BRACKET:            "[",
+	RIGHT_BRACKET:           "]",
+	COMMA:                   ",",
+	EQL:                     "=",
+	COLON:                   ":",
+	SEMICOLON:               ";",
+	START:                   "start()",
+	END:                     "end()",
+	STEP:                    "step()",
+	SUM_DESC:                "sum",
+	COUNT_DESC:              "count",
+	SCHEMA_DESC:             "schema",
+	OFFSET_DESC:             "offset",
+	NEGATIVE_OFFSET_DESC:    "negative_offset",
+	BUCKETS_DESC:            "buckets",
+	NEGATIVE_BUCKETS_DESC:   "negative_buckets",
+	ZERO_BUCKET_DESC:        "zero_bucket",
+	ZERO_BUCKET_WIDTH_DESC:  "zero_bucket_width",
+	CUSTOM_VALUES_DESC:      "custom_values",
+	COUNTER_RESET_HINT_DESC: "counter_reset_hint",
+	UNKNOWN_COUNTER_RESET:   "unknown",
+	COUNTER_RESET:           "reset",
+	NOT_COUNTER_RESET:       "not_reset",
+	GAUGE_TYPE:              "gauge",
+	BLANK:                   "_",
+	TIMES:                   "x",
+	SPACE:                   "<space>",
 
 	SUB:       "-",
 	ADD:       "+",

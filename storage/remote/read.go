@@ -138,16 +138,84 @@ type querier struct {
 //
 // If requiredMatchers are given, select returns a NoopSeriesSet if the given matchers don't match the label set of the
 // requiredMatchers. Otherwise it'll just call remote endpoint.
+//
+// If requiredMatchers are given, select returns a NoopSeriesSet if the given matchers don't match the label set of the
+// requiredMatchers.
 func (q *querier) Select(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+	// Check if we have required matchers and if the query matchers satisfy them
 	if len(q.requiredMatchers) > 0 {
 		// Copy to not modify slice configured by user.
 		requiredMatchers := append([]*labels.Matcher{}, q.requiredMatchers...)
 		for _, m := range matchers {
 			for i, r := range requiredMatchers {
-				if m.Type == labels.MatchEqual && m.Name == r.Name && m.Value == r.Value {
-					// Requirement matched.
-					requiredMatchers = append(requiredMatchers[:i], requiredMatchers[i+1:]...)
-					break
+				if m.Name == r.Name {
+					switch r.Type {
+					case labels.MatchEqual:
+						// For equality matcher, we need an exact match
+						if m.Type == labels.MatchEqual && m.Value == r.Value {
+							requiredMatchers = append(requiredMatchers[:i], requiredMatchers[i+1:]...)
+							break
+						}
+					case labels.MatchRegexp:
+						// For regexp matchers, we need to check if the value matches the pattern
+						if m.Type == labels.MatchEqual && r.Matches(m.Value) {
+							requiredMatchers = append(requiredMatchers[:i], requiredMatchers[i+1:]...)
+							break
+						}
+					case labels.MatchNotEqual:
+						// For negative equality, we need to ensure the value is different
+						if m.Type == labels.MatchEqual && m.Value != r.Value {
+							requiredMatchers = append(requiredMatchers[:i], requiredMatchers[i+1:]...)
+							break
+						}
+					case labels.MatchNotRegexp:
+						// For negative regexp, we need to ensure the value doesn't match the pattern
+						if m.Type == labels.MatchEqual && !r.Matches(m.Value) {
+							requiredMatchers = append(requiredMatchers[:i], requiredMatchers[i+1:]...)
+							break
+						}
+					}
+				}
+			}
+			if len(requiredMatchers) == 0 {
+				break
+			}
+		}
+		if len(requiredMatchers) > 0 {
+			return storage.NoopSeriesSet()
+		}
+	}
+
+	if len(q.requiredMatchers) > 0 {
+		// Copy to not modify slice configured by user.
+		requiredMatchers := append([]*labels.Matcher{}, q.requiredMatchers...)
+		for _, m := range matchers {
+			for i, r := range requiredMatchers {
+				if m.Name == r.Name {
+					// For equality matchers we can do a direct value comparison
+					if r.Type == labels.MatchEqual && m.Type == labels.MatchEqual && m.Value == r.Value {
+						requiredMatchers = append(requiredMatchers[:i], requiredMatchers[i+1:]...)
+						break
+					}
+					// For regexp matchers we need to check if the value matches the pattern
+					if r.Type == labels.MatchRegexp && m.Type == labels.MatchEqual {
+						if r.Matches(m.Value) {
+							requiredMatchers = append(requiredMatchers[:i], requiredMatchers[i+1:]...)
+							break
+						}
+					}
+					// For negative equality, we check if the value doesn't match
+					if r.Type == labels.MatchNotEqual && m.Type == labels.MatchEqual && m.Value != r.Value {
+						requiredMatchers = append(requiredMatchers[:i], requiredMatchers[i+1:]...)
+						break
+					}
+					// For negative regexp, we check if the value doesn't match the pattern
+					if r.Type == labels.MatchNotRegexp && m.Type == labels.MatchEqual {
+						if !r.Matches(m.Value) {
+							requiredMatchers = append(requiredMatchers[:i], requiredMatchers[i+1:]...)
+							break
+						}
+					}
 				}
 			}
 			if len(requiredMatchers) == 0 {

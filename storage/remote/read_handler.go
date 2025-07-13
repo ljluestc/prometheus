@@ -112,6 +112,20 @@ func (h *readHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.remoteReadSamples(ctx, w, req, externalLabels, sortedExternalLabels)
 	}
 }
+	
+	// RequiredMatchersQueryable is a queryable that filters queries based on required matchers.
+	type RequiredMatchersQueryable struct {
+	storage.SampleAndChunkQueryable
+	requiredMatchers []*labels.Matcher
+	}
+	
+	// NewRequiredMatchersQueryable creates a queryable that filters queries based on required matchers.
+	func NewRequiredMatchersQueryable(q storage.SampleAndChunkQueryable, requiredMatchers []*labels.Matcher) *RequiredMatchersQueryable {
+	return &RequiredMatchersQueryable{
+		SampleAndChunkQueryable: q,
+		requiredMatchers:        requiredMatchers,
+	}
+	}
 
 func (h *readHandler) remoteReadSamples(
 	ctx context.Context,

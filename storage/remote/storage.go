@@ -193,6 +193,14 @@ func (s *Storage) Appender(ctx context.Context) storage.Appender {
 	return s.rws.Appender(ctx)
 }
 
+// GetRequiredMatchersForClient returns the required matchers for a given client.
+func (s *Storage) GetRequiredMatchersForClient(c ReadClient) []*labels.Matcher {
+	if client, ok := c.(*Client); ok {
+		return client.requiredMatchers
+	}
+	return nil
+}
+
 // LowestSentTimestamp returns the lowest sent timestamp across all queues.
 func (s *Storage) LowestSentTimestamp() int64 {
 	return s.rws.LowestSentTimestamp()

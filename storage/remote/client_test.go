@@ -16,6 +16,7 @@ package remote
 import (
 	"context"
 	"errors"
+	"github.com/prometheus/prometheus/model/labels"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -172,6 +173,102 @@ func TestRetryAfterDuration(t *testing.T) {
 	}
 	for _, c := range tc {
 		require.Equal(t, c.expected, retryAfterDuration(c.tInput), c.name)
+	}
+}
+
+func TestRequiredMatchersParsing(t *testing.T) {
+	tests := []struct {
+		name             string
+		requiredMatchers []string
+		expectError      bool
+		expectedMatchers []*labels.Matcher
+	}{
+		{
+			name:             "valid equal matcher",
+			requiredMatchers: []string{`{cluster="A"}`},
+			expectError:      false,
+			expectedMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "A"),
+			},
+		},
+		{
+			name:             "valid regex matcher",
+			requiredMatchers: []string{`{cluster=~"A.*"}`},
+			expectError:      false,
+			expectedMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchRegexp, "cluster", "A.*"),
+			},
+		},
+		{
+			name:             "valid not equal matcher",
+			requiredMatchers: []string{`{cluster!="B"}`},
+			expectError:      false,
+			expectedMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchNotEqual, "cluster", "B"),
+			},
+		},
+		{
+			name:             "valid not regex matcher",
+			requiredMatchers: []string{`{cluster!~"B.*"}`},
+			expectError:      false,
+			expectedMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchNotRegexp, "cluster", "B.*"),
+			},
+		},
+		{
+			name:             "invalid matcher",
+			requiredMatchers: []string{`{cluster="A`},
+			expectError:      true,
+		},
+		{
+			name:             "multiple matchers",
+			requiredMatchers: []string{`{cluster="A", environment="prod"}`},
+			expectError:      false,
+			expectedMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "A"),
+				labels.MustNewMatcher(labels.MatchEqual, "environment", "prod"),
+			},
+		},
+		{
+			name:             "multiple matcher strings",
+			requiredMatchers: []string{`{cluster="A"}`, `{environment="prod"}`},
+			expectError:      false,
+			expectedMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "cluster", "A"),
+				labels.MustNewMatcher(labels.MatchEqual, "environment", "prod"),
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.RemoteReadConfig{
+				URL:              &config.URL{URL: testutil.MustParseURL("http://example.com")},
+				RequiredMatchers: tc.requiredMatchers,
+			}
+
+			client, err := NewReadClient(1, &cfg)
+			if tc.expectError {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, client)
+
+			// Check that the client has the correct matchers
+			c, ok := client.(*Client)
+			require.True(t, ok)
+
+			require.Equal(t, len(tc.expectedMatchers), len(c.requiredMatchers))
+
+			// Check each matcher
+			for i, expected := range tc.expectedMatchers {
+				require.Equal(t, expected.Type, c.requiredMatchers[i].Type)
+				require.Equal(t, expected.Name, c.requiredMatchers[i].Name)
+				require.Equal(t, expected.Value, c.requiredMatchers[i].Value)
+			}
+		})
 	}
 }
 

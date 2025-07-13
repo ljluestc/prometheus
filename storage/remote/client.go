@@ -38,7 +38,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/prompb"
+	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/storage/remote/azuread"
 	"github.com/prometheus/prometheus/storage/remote/googleiam"
@@ -151,6 +153,25 @@ func NewReadClient(name string, conf *ClientConfig, optFuncs ...config_util.HTTP
 		return nil, err
 	}
 
+	// Parse required matchers.
+	var requiredMatchers []*labels.Matcher
+	if len(conf.RequiredMatchers) > 0 {
+		requiredMatchers, err = parseRequiredMatchers(conf.RequiredMatchers)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Parse required matchers.
+	var requiredMatchers []*labels.Matcher
+	for _, s := range conf.RequiredMatchers {
+		matchers, err := parser.ParseMetricSelector(s)
+		if err != nil {
+			return nil, errors.Wrapf(err, "invalid required matcher %q", s)
+		}
+		requiredMatchers = append(requiredMatchers, matchers...)
+	}
+
 	t := httpClient.Transport
 	if len(conf.Headers) > 0 {
 		t = newInjectHeadersRoundTripper(conf.Headers, t)
@@ -187,6 +208,16 @@ func NewWriteClient(name string, conf *ClientConfig) (WriteClient, error) {
 
 	if conf.SigV4Config != nil {
 		t, err = sigv4.NewSigV4RoundTripper(conf.SigV4Config, t)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Parse matchers.
+	var matchers []*labels.Matcher
+	if len(conf.RequiredMatchers) > 0 {
+		var err error
+		matchers, err = parseRequiredMatchers(conf.RequiredMatchers)
 		if err != nil {
 			return nil, err
 		}
@@ -330,6 +361,19 @@ func retryAfterDuration(t string) model.Duration {
 // Name uniquely identifies the client.
 func (c *Client) Name() string {
 	return c.remoteName
+}
+
+// parseRequiredMatchers parses the required matchers from the config
+func parseRequiredMatchers(requiredMatchersStrings []string) ([]*labels.Matcher, error) {
+	var requiredMatchers []*labels.Matcher
+	for _, s := range requiredMatchersStrings {
+		matchers, err := parser.ParseMetricSelector(s)
+		if err != nil {
+			return nil, fmt.Errorf("invalid required matcher %q: %w", s, err)
+		}
+		requiredMatchers = append(requiredMatchers, matchers...)
+	}
+	return requiredMatchers, nil
 }
 
 // Endpoint is the remote read or write endpoint.
